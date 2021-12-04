@@ -8,7 +8,7 @@ namespace AI_Strategy_Utilities
 {
     public static class StaticStrategyUtilities
     {
-        public static List<Unit> CheckEnemyUnits(string type, PlayerLane lane)
+        public static List<Unit> GetUnitsOfType(string type, PlayerLane lane)
         {
             //workaround because lists of PlayerLane.cs are not accessible
             List<Unit> tempUnitList = new List<Unit>();
@@ -29,10 +29,10 @@ namespace AI_Strategy_Utilities
             return tempUnitList;
         }
 
-        public static List<Vector2D> GetEnemyPositions(List<Unit> enemyList)
+        public static List<Vector2D> GetUnitPositions(List<Unit> unitList)
         {
             List<Vector2D> tempVectorPositions = new List<Vector2D>();
-            foreach (Unit unit in enemyList)
+            foreach (Unit unit in unitList)
             {
                 tempVectorPositions.Add(new Vector2D(unit.PosX, unit.PosY));
             }
@@ -46,8 +46,18 @@ namespace AI_Strategy_Utilities
             return originYPos;
         }
 
+        public static int SmoothHeightPosition(int originYPos)
+        {
+            if (originYPos < PlayerLane.HEIGHT_OF_SAFETY_ZONE-1)
+                return PlayerLane.HEIGHT_OF_SAFETY_ZONE - 1;
+            else if (originYPos > PlayerLane.HEIGHT - 1)
+                return PlayerLane.HEIGHT - 1;
+            return originYPos;
+        }
+
         public static int SmoothTowerXPosition(int originXPos)
         {
+            originXPos = SmoothWidthPosition(originXPos);
             if (originXPos % 2 == 1)
                 return ++originXPos;
             return originXPos;

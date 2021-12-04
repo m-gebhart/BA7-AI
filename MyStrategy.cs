@@ -18,7 +18,7 @@ namespace AI_Strategy
 
     public class MyStrategy : AbstractStrategy
     {
-        public static readonly int SOLDIER_COST = 2, SOLDIER_RANGE = 2;
+        public static readonly int SOLDIER_COST = 2, SOLDIER_RANGE = 2, TOWER_SPAWN_DISTANCE = 2;
         StrategySet activeStrategy;
         List<Unit> EnemySoldiers, EnemyTowers;
         public List<Vector2D> EnemySoldierPositions, EnemyTowerPositons;
@@ -30,13 +30,24 @@ namespace AI_Strategy
         void CheckStressLevel()
         {
             int ownTowerCount = defendLane.TowerCount();
-            foreach (Tower tower in EnemyTowers)
+            if (EnemyTowers != null)
             {
-                if (tower.Health < 3)
-                    ownTowerCount--;
+                foreach (Tower tower in EnemyTowers)
+                {
+                    if (tower.Health < 3)
+                        ownTowerCount--;
+                }
             }
 
             float enemySoldierCount = defendLane.SoldierCount();
+            if (EnemySoldiers != null)
+            {
+                foreach (Soldier soldier in EnemySoldiers)
+                {
+                    if (IsCriticallyClose(soldier.PosY))
+                        enemySoldierCount++;
+                }
+            }
 
             //STRESS LEVEL: performance of enemy soldiers + status of own towers compared to enemy towers
             float tempStressLevel = enemySoldierCount + Math.Max(0, attackLane.TowerCount() - ownTowerCount);
@@ -50,6 +61,20 @@ namespace AI_Strategy
                 activeStrategy.stressLevel = EStressLevel.high;
         }
 
+        EDefenseStrategy GetDefenseStrategy()
+        {
+            switch (activeStrategy.stressLevel)
+            {
+                case EStressLevel.low:
+                    return EDefenseStrategy.defendFront;
+                case EStressLevel.middle:
+                    return EDefenseStrategy.defendMiddle;
+                case EStressLevel.high:
+                default:
+                    return EDefenseStrategy.defendBack;
+            }
+        }
+
         void EvaluateBuyingBehaviour() 
         {
             activeStrategy.towersToBuy = 0;
@@ -57,7 +82,7 @@ namespace AI_Strategy
             int goldWallet = player.Gold;
             while (goldWallet > Tower.GetNextTowerCosts(defendLane) || goldWallet > SOLDIER_COST) 
             {
-                //more defense with high stress level -> prioritize towers
+                //more defense with high stress level -> prioritize towers, then buy a few soldiers on top
                 if (activeStrategy.stressLevel == EStressLevel.high) 
                 {
                     while (goldWallet > Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersToBuy * defendLane.TowerCount()) 
@@ -65,7 +90,9 @@ namespace AI_Strategy
                         goldWallet -= Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersToBuy * defendLane.TowerCount();
                         activeStrategy.towersToBuy++;
                     }
-                    while (goldWallet > SOLDIER_COST)
+
+                    Random random = new Random();
+                    for (int randomSoldierNumber = random.Next(0, 3); randomSoldierNumber > 0; randomSoldierNumber--) 
                     {
                         goldWallet -= SOLDIER_COST;
                         activeStrategy.soldiersToBuy++;
@@ -86,7 +113,6 @@ namespace AI_Strategy
                     }
                 }
             }
-            instantLogMessage = "S: " + activeStrategy.stressLevel.ToString() + "T: " + activeStrategy.towersToBuy + " S: " + activeStrategy.soldiersToBuy;
         }
 
 
@@ -104,51 +130,16 @@ namespace AI_Strategy
 
                     int spawnYLine = GetTowerDeploymentYPos();
                     int spawnXLine = GetTowerDeploymentXPos();
-                    //BUY IF INTENDED POSITION NOT OCCUPIED
-                    if (CanBuyTower(defendLane, spawnXLine, spawnYLine))
+                    Tower tower = player.BuyTower(defendLane, spawnXLine, spawnYLine);
+                    if (tower == null)
                     {
-                        Tower tower = player.BuyTower(defendLane, spawnXLine, spawnYLine);
+                        //INTENDED POSITION ALREADY OCCUPIED
+                        Vector2D altPos = GetFreeTowerPosition(spawnXLine, spawnYLine);
+                        player.BuyTower(defendLane, (int)altPos.xPos, (int)altPos.yPos);
                     }
-
-                    else if (EnemySoldierPositions != null)
-                    {   //ELSE: FIND FREE POSITION CLOSE BY
-                        bool positioned = false;
-                        int xpos = (int)Math.Round(GetAverageUnitLocation(defendLane, EnemySoldierPositions, EnemySoldierPositions.Count).xPos);
-                        for (int y = 1; y >= -1; y--) {
-                            for (int x = 1; x >= 0; x--)
-                                if (CanBuyTower(defendLane, spawnXLine, spawnYLine))
-                                {
-                                    if (player.BuyTower(defendLane, spawnXLine, spawnYLine) != null)
-                                        positioned = true;
-                                } 
-                        }
-                        //ELSE: JUST PUT ANYWHERE IF NOWHERE CLOSE
-                        if (!positioned)
-                        {
-                            int attempts = 5;
-                            while (attempts > 0)
-                            { 
-                                Random random = new Random();
-                                if (player.BuyTower(defendLane,
-                                    StaticStrategyUtilities.SmoothTowerXPosition(random.Next(0, PlayerLane.WIDTH - 1)),
-                                    StaticStrategyUtilities.SmoothTowerYPosition(random.Next(PlayerLane.HEIGHT_OF_SAFETY_ZONE, PlayerLane.HEIGHT - 1))) != null)
-                                        positioned = true;
-                                attempts--;
-                            }
-                        }
-                    }
+                    activeStrategy.towersToBuy--;
                 }
-                activeStrategy.towersToBuy--;
-            }
-        }
-
-        bool CanBuyTower(PlayerLane lane, int x, int y) //copied from Player.cs
-        {
-            return y >= PlayerLane.HEIGHT_OF_SAFETY_ZONE && 
-                y < PlayerLane.HEIGHT &&
-                x >= 0 && x < PlayerLane.WIDTH &&
-                lane.GetCellAt(x, y).Unit == null &&
-                (y % 2) != 0 && (x % 2) == 0;
+            } 
         }
 
         int GetTowerDeploymentYPos() 
@@ -190,42 +181,67 @@ namespace AI_Strategy
         int GetTowerDeploymentXPos() 
         {
             int xPos = PlayerLane.WIDTH/2; //default: mid
-            //IF BOTTOM SOLDIER TO CLOSE TO GOAL; SET TOWER CLOSE
+            //IF BOTTOM SOLDIER TO CLOSE TO GOAL; GET SAME X POSITION
             if (IsCriticallyClose(GetBottomEnemySoldier().yPos))
                 xPos = (int)GetBottomEnemySoldier().xPos;
-            else if (EnemySoldierPositions != null) //ELSE: GET AVERAGE POSITION OF ALL ENEMIES
+            else if (EnemySoldierPositions != null) //ELSE: GET AVERAGE X POSITION OF ALL ENEMIES
                 xPos = (int)Math.Round(GetAverageUnitLocation(defendLane, EnemySoldierPositions, EnemySoldierPositions.Count).xPos);
             xPos = StaticStrategyUtilities.SmoothTowerXPosition(xPos);
             return xPos;
         }
 
-        Vector2D GetAverageUnitLocation(PlayerLane lane, List<Vector2D> unitPositionList, int count)
+        Vector2D GetFreeTowerPosition(int originXLine, int spawnYLine)
         {
-            float xAverage = 0;
-            float yAverage = 0;
-            foreach (Vector2D vector2D in EnemySoldierPositions)
-            {
-                xAverage += vector2D.xPos;
-                if (IsCriticallyClose(vector2D.yPos))
-                    yAverage += vector2D.yPos * 1.5f;
-                else
-                    yAverage += vector2D.yPos;
-            }
-            return new Vector2D(xAverage /= count, yAverage /= count);
-        }
+            if (defendLane.GetCellAt(originXLine, spawnYLine) != null)
+                if (defendLane.GetCellAt(originXLine, spawnYLine).Unit == null)
+                    return new Vector2D(originXLine, spawnYLine);
 
-        EDefenseStrategy GetDefenseStrategy() 
-        {
-            switch (activeStrategy.stressLevel) 
+            List<Vector2D> towersOnYLine = new List<Vector2D>();
+            List<Unit> deployedTowers = StaticStrategyUtilities.GetUnitsOfType("T", defendLane);
+            if (deployedTowers.Count == 0)
+                return new Vector2D(originXLine, spawnYLine);
+
+            foreach (Vector2D vector2D in StaticStrategyUtilities.GetUnitPositions(deployedTowers))
             {
-                case EStressLevel.low:
-                    return EDefenseStrategy.defendFront;
-                case EStressLevel.middle:
-                    return EDefenseStrategy.defendMiddle;
-                case EStressLevel.high:
-                default:
-                    return EDefenseStrategy.defendBack;
+                if (vector2D.yPos == spawnYLine)
+                    towersOnYLine.Add(vector2D);
             }
+
+            Vector2D freeCell = new Vector2D();
+            int enemyWeightXPos = EnemySoldierPositions != null ? (int)Math.Round(GetAverageUnitLocation(defendLane, EnemySoldierPositions, EnemySoldierPositions.Count).xPos) : PlayerLane.WIDTH / 2;
+            int signDirection = Math.Sign(enemyWeightXPos - originXLine);
+            //if still space on y Line
+            if (towersOnYLine.Count < PlayerLane.WIDTH / 2)
+            {
+                bool positionFound = false;
+                for (int attempts = 1; attempts <= PlayerLane.WIDTH / 2 && !positionFound; attempts++)
+                {
+                    int attemptX = StaticStrategyUtilities.SmoothWidthPosition(originXLine + signDirection * TOWER_SPAWN_DISTANCE * attempts);
+                    if (defendLane.GetCellAt(attemptX, spawnYLine) == null)
+                    {
+                        freeCell = new Vector2D(attemptX, spawnYLine);
+                        positionFound = true; break;
+                    }
+                    else
+                    {
+                        attemptX = StaticStrategyUtilities.SmoothWidthPosition(originXLine + (-1) * signDirection * TOWER_SPAWN_DISTANCE * attempts);
+                        if (defendLane.GetCellAt(attemptX, spawnYLine) == null)
+                        {
+                            freeCell = new Vector2D(attemptX, spawnYLine);
+                            positionFound = true; break;
+                        }
+                    }
+                }
+            }
+
+            else //move up - recursive
+            {
+                Random random = new Random();
+                int newYAttempt = StaticStrategyUtilities.SmoothHeightPosition(spawnYLine + TOWER_SPAWN_DISTANCE * random.Next(1, 3));
+                GetFreeTowerPosition(originXLine, newYAttempt);
+            }
+
+            return freeCell;
         }
 
         public override void DeploySoldiers()
@@ -238,7 +254,6 @@ namespace AI_Strategy
                 averageEnemyTowerPosition = (int)Math.Round(GetAverageUnitLocation(attackLane, EnemyTowerPositons, EnemyTowerPositons.Count - 1).xPos);
 
             Random random = new Random();
-
             while (activeStrategy.soldiersToBuy > 0) 
             {
                 //choose random side that is not average position of enemy towers
@@ -263,19 +278,19 @@ namespace AI_Strategy
 
         void UpdateEnemySoldiers()
         {
-            EnemySoldiers = StaticStrategyUtilities.CheckEnemyUnits("S", defendLane);
+            EnemySoldiers = StaticStrategyUtilities.GetUnitsOfType("S", defendLane);
             EnemySoldierPositions = GetEnemySoldierPositions();
         }
 
         void UpdateEnemyTowers()
         {
-            EnemyTowers = StaticStrategyUtilities.CheckEnemyUnits("T", attackLane);
+            EnemyTowers = StaticStrategyUtilities.GetUnitsOfType("T", attackLane);
             EnemyTowerPositons = GetEnemyTowerPositions();
         }
 
         List<Vector2D> GetEnemySoldierPositions() 
         {
-            return StaticStrategyUtilities.GetEnemyPositions(EnemySoldiers);
+            return StaticStrategyUtilities.GetUnitPositions(EnemySoldiers);
         }
 
         Vector2D GetBottomEnemySoldier() 
@@ -287,7 +302,22 @@ namespace AI_Strategy
 
         List<Vector2D> GetEnemyTowerPositions()
         {
-            return StaticStrategyUtilities.GetEnemyPositions(EnemyTowers);
+            return StaticStrategyUtilities.GetUnitPositions(EnemyTowers);
+        }
+
+        Vector2D GetAverageUnitLocation(PlayerLane lane, List<Vector2D> unitPositionList, int count)
+        {
+            float xAverage = 0;
+            float yAverage = 0;
+            foreach (Vector2D vector2D in EnemySoldierPositions)
+            {
+                xAverage += vector2D.xPos;
+                if (IsCriticallyClose(vector2D.yPos))
+                    yAverage += vector2D.yPos * 1.5f;
+                else
+                    yAverage += vector2D.yPos;
+            }
+            return new Vector2D(xAverage /= count, yAverage /= count);
         }
 
         bool IsCriticallyClose(float yPos) 
