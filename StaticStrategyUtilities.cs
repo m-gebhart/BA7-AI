@@ -1,5 +1,6 @@
 ﻿using System;
 using GameFramework;
+using AI_Strategy;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -29,18 +30,19 @@ namespace AI_Strategy_Utilities
             return tempUnitList;
         }
 
-        public static List<Vector2D> GetUnitPositions(List<Unit> unitList)
+        public static List<Vector2Di> GetUnitPositions(List<Unit> unitList)
         {
-            List<Vector2D> tempVectorPositions = new List<Vector2D>();
+            List<Vector2Di> tempVectorPositions = new List<Vector2Di>();
             foreach (Unit unit in unitList)
             {
-                tempVectorPositions.Add(new Vector2D(unit.PosX, unit.PosY));
+                tempVectorPositions.Add(new Vector2Di(unit.PosX, unit.PosY));
             }
             return tempVectorPositions;
         }
 
         public static int SmoothTowerYPosition(int originYPos) 
         {
+            originYPos = SmoothHeightPosition(originYPos);
             if (originYPos % 2 == 0)
                 return ++originYPos;
             return originYPos;
@@ -71,12 +73,47 @@ namespace AI_Strategy_Utilities
                 return PlayerLane.WIDTH - 1;
             return originXPos;
         }
+
+        public static bool IsHeightPosValid(int yPos) 
+        {
+            return yPos >= 0 && yPos < PlayerLane.HEIGHT;
+        }
+
+        public static bool IsWidthPosValid(int xPos)
+        {
+            return xPos >= 0 && xPos < PlayerLane.WIDTH;
+        }
+
+        public static Vector2Df GetAverageUnitLocation(PlayerLane lane, List<Vector2Di> unitPositionList, int count)
+        {
+            float xAverage = 0;
+            float yAverage = 0;
+            foreach (Vector2Di vector2D in unitPositionList)
+            {
+                xAverage += vector2D.xPos;
+                if (MyStrategy.IsCriticallyClose(vector2D.yPos))
+                    yAverage += vector2D.yPos * 1.5f;
+                else
+                    yAverage += vector2D.yPos;
+            }
+            return new Vector2Df(xAverage /= count, yAverage /= count);
+        }
     }
 
-    public struct Vector2D
+    public struct Vector2Df
     {
         public float xPos, yPos;
-        public Vector2D(float x, float y)
+        public Vector2Df(float x, float y)
+        {
+            this.xPos = x;
+            this.yPos = y;
+        }
+    }
+
+    public struct Vector2Di 
+    {
+        public int xPos, yPos;
+        public Vector2Di(int x, int y) 
         {
             this.xPos = x;
             this.yPos = y;
