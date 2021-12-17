@@ -84,19 +84,24 @@ namespace AI_Strategy_Utilities
             return xPos >= 0 && xPos < PlayerLane.WIDTH;
         }
 
-        public static Vector2Df GetAverageUnitLocation(PlayerLane lane, List<Vector2Di> unitPositionList, int count)
+        public static Vector2Df GetAverageUnitLocation(PlayerLane lane, List<Vector2Di> unitPositionList)
+        {
+            return GetAverageUnitLocation(lane,unitPositionList, 0f);
+        }
+
+        public static Vector2Df GetAverageUnitLocation(PlayerLane lane, List<Vector2Di> unitPositionList, float critValue)
         {
             float xAverage = 0;
             float yAverage = 0;
             foreach (Vector2Di vector2D in unitPositionList)
             {
                 xAverage += vector2D.xPos;
-                if (MyStrategy.IsCriticallyClose(vector2D.yPos))
-                    yAverage += vector2D.yPos * 1.5f;
+                if (MGStrategy.IsCriticallyClose(vector2D.yPos) && critValue != 0f)
+                    yAverage += vector2D.yPos * critValue;
                 else
                     yAverage += vector2D.yPos;
             }
-            return new Vector2Df(xAverage /= count, yAverage /= count);
+            return new Vector2Df(xAverage /= unitPositionList.Count, yAverage /= unitPositionList.Count);
         }
     }
 
