@@ -11,14 +11,14 @@ namespace AI_Strategy
     struct StrategySet 
     { 
         public float stressLevelValue; //own endangerment and enemy player's performance
-        public int towersToBuy, soldiersToBuy, towersBought, soldiersBought;
+        public int towersBuyTargetNr, soldiersBuyTargetNr, towersBought, soldiersBought;
         public EDefenseStrategy defenseStrategy;
         public EStressLevel stressLevel;
 
         public void ClearBuyingData() 
         {
-            towersToBuy = 0;
-            soldiersToBuy = 0;
+            towersBuyTargetNr = 0;
+            soldiersBuyTargetNr = 0;
             towersBought = 0;
             soldiersBought = 0;
         }
@@ -38,6 +38,7 @@ namespace AI_Strategy
 
         void UpdateStressLevel()
         {
+            //STRESS LEVEL: PERFORMANCE OF ENEMY SOLDIERS + NUMBER OF DEFENSE TOWERS COMPARED TO ENEMY
             int ownTowerCount = defendLane.TowerCount();
             if (enemyTowers != null)
             {
@@ -58,7 +59,7 @@ namespace AI_Strategy
                 }
             }
 
-            //STRESS LEVEL: performance of enemy soldiers + status of own towers compared to enemy towers
+            //CALCULATING STRESS LEVEL
             float tempStressLevel = enemySoldierCount + Math.Max(0, attackLane.TowerCount() - ownTowerCount);
             activeStrategy.stressLevelValue = Math.Max(0, tempStressLevel);
 
@@ -72,6 +73,7 @@ namespace AI_Strategy
 
         EDefenseStrategy GetDefenseStrategy()
         {
+            //MOVE DEFENSE LINES TO THE BACK WITH HIGHER NUMBER OF ENEMIES
             switch (activeStrategy.stressLevel)
             {
                 case EStressLevel.low:
@@ -90,38 +92,37 @@ namespace AI_Strategy
             int goldWallet = player.Gold;
             if (goldWallet > Tower.GetNextTowerCosts(defendLane) || goldWallet > SOLDIER_COST) 
             {
-                AI_TowerDefense.TowerDefense.LOG_Message = activeStrategy.stressLevel.ToString() + " ";
-                //high stress level -> more defense -> prioritize towers, then buy soldiers on top
+                //MORE DEFENSE WITH HIGH STRESS LEVEL -> PRIORITIZE TOWERS, THEN BUY SOLDIERS WITH REST
                 if (activeStrategy.stressLevel == EStressLevel.high) 
                 {
-                    //simulate next tower costs
-                    while (goldWallet > Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersToBuy * defendLane.TowerCount()) 
+                    //SIMULATE NEXT TOWER COSTS
+                    while (goldWallet > Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersBuyTargetNr * defendLane.TowerCount()) 
                     {
-                        goldWallet -= Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersToBuy * defendLane.TowerCount();
-                        activeStrategy.towersToBuy++;
+                        goldWallet -= Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersBuyTargetNr * defendLane.TowerCount();
+                        activeStrategy.towersBuyTargetNr++;
                     }
 
                     Random random = new Random();
                     for (int randomSoldierNumber = goldWallet/SOLDIER_COST; randomSoldierNumber > 0; randomSoldierNumber--) 
                     {
                         goldWallet -= SOLDIER_COST;
-                        activeStrategy.soldiersToBuy++;
+                        activeStrategy.soldiersBuyTargetNr++;
                     }
                 }
 
                 else 
-                { //balancing soldiers and towers in accordance to money
+                { //BALANCING SOLDIERS IN ACCORDANCE TO MONEY
                     for (int i = goldWallet / SOLDIER_COST; i > 0; i--) 
                     {
-                        if (goldWallet > Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersToBuy * defendLane.TowerCount())
+                        if (goldWallet > Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersBuyTargetNr * defendLane.TowerCount())
                         {
-                            goldWallet -= Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersToBuy * defendLane.TowerCount();
-                            activeStrategy.towersToBuy++;
+                            goldWallet -= Tower.GetNextTowerCosts(defendLane) + activeStrategy.towersBuyTargetNr * defendLane.TowerCount();
+                            activeStrategy.towersBuyTargetNr++;
                         }
                         if (goldWallet > SOLDIER_COST)
                         {
                             goldWallet -= SOLDIER_COST;
-                            activeStrategy.soldiersToBuy++;
+                            activeStrategy.soldiersBuyTargetNr++;
                         } 
                     }
                 }
@@ -133,12 +134,13 @@ namespace AI_Strategy
             UpdateEnemyTowers();
             UpdateStressLevel();
             EvaluateBuyingBehaviour();
-            for (int i = 0; i < activeStrategy.towersToBuy; i++)
+            for (int i = 0; i < activeStrategy.towersBuyTargetNr; i++)
             {
                 if (player.Gold >= Tower.GetNextTowerCosts(defendLane))
                 {
                     activeStrategy.defenseStrategy = GetDefenseStrategy();
 
+                    //FIRST BUY ATTEMPT BY FINDING OPTIMAL POSITION
                     int spawnYLine = GetTowerDeploymentYPos();
                     int spawnXLine = GetTowerDeploymentXPos();
                     Tower tower = player.BuyTower(defendLane, spawnXLine, spawnYLine);
@@ -146,7 +148,7 @@ namespace AI_Strategy
                         activeStrategy.towersBought++;
                     else
                     {
-                        //if first attempt not successful
+                        //IF FIRST ATTEMPT NOT SUCCESSFUL; TRY TO BUILD UP (MID OR HIGH STRESS) OR DOWN (LOW STRESS) THE LANE
                         Random random = new Random();
                         int yAttempts = random.Next(1, 3);
                         bool positionFound = false;
@@ -173,7 +175,7 @@ namespace AI_Strategy
             int yPos = 0;
             Random yRandom = new Random();
 
-            //IF BOTTOM SOLDIER CLOSE TO FINISH LINE
+            //IF BOTTOM SOLDIER TOO CLOSE TO FINISH LINE, TRY TO BUILD TWER AHEAD OF HIM
             if (AreSoldiersCriticallyClose())
                 yPos = GetBottomEnemySoldierPosition().yPos;
             //ELSE: BUILD DEFENSIVE LINES
@@ -198,7 +200,7 @@ namespace AI_Strategy
 
         int GetTowerDeploymentXPos() 
         {
-            int xPos = PlayerLane.WIDTH/2; //default: mid
+            int xPos = PlayerLane.WIDTH/2; //DEFAULT: MID
             //IF BOTTOM SOLDIER TOO CLOSE TO FINISH LINE; GET SAME X POSITION
             if (AreSoldiersCriticallyClose())
                 xPos = GetBottomEnemySoldierPosition().xPos;
@@ -214,7 +216,7 @@ namespace AI_Strategy
                 if (defendLane.GetCellAt(originXLine, spawnYLine).Unit == null)
                     return new Vector2Di(originXLine, spawnYLine);
 
-            //get established towers on lane (due to inaccessible list 'tower' in PlayerLane.cs)
+            //GET ESTABLISHED TOWERS ON LANE (DUE TO INACCESSIBLE LIST 'TOWER' IN PLAYERLANE.CS)
             List<Vector2Di> towersOnYLine = new List<Vector2Di>();
             List<Unit> deployedTowers = StaticStrategyUtilities.GetUnitsOfType("T", defendLane);
             if (deployedTowers.Count == 0)
@@ -226,25 +228,25 @@ namespace AI_Strategy
                     towersOnYLine.Add(vector2D);
             }
 
-            //search direction of new position (towards enemy center)
+            //SEARCH DIRECTION OF NEW POSITION (TOWARDS ENEMY CENTER)
             Vector2Di freeCell = new Vector2Di();
             int enemyWeightXPos = enemySoldierPositions != null ? (int)Math.Round(StaticStrategyUtilities.GetAverageUnitLocation(defendLane, enemySoldierPositions, 1.5f).xPos) : PlayerLane.WIDTH / 2;
             int signDirection = Math.Sign(enemyWeightXPos - originXLine);
 
-            //if still space on y Line, search from center to border from intended x Position
+            //IF STILL SPACE ON Y LINE, SEARCH FROM CENTER TO BORDER FROM INTENDED X POSITION
             if (towersOnYLine.Count < PlayerLane.WIDTH / TOWER_SPAWN_DISTANCE)
             {
                 bool positionFound = false;
                 for (int attempts = 1; attempts <= PlayerLane.WIDTH / 2 && !positionFound; attempts++)
                 {
-                    //search in direction of enemy center
+                    //SEARCH IN DIRECTION OF ENEMY CENTER
                     int attemptX = StaticStrategyUtilities.SmoothWidthPosition(originXLine + signDirection * TOWER_SPAWN_DISTANCE * attempts);
                     if (defendLane.GetCellAt(attemptX, spawnYLine) == null)
                     {
                         freeCell = new Vector2Di(attemptX, spawnYLine);
                         positionFound = true; break;
                     }
-                    //search in opposite direction of enemy center
+                    //SEARCH IN OPPOSITE DIRECTION OF ENEMY CENTER
                     else
                     {
                         attemptX = StaticStrategyUtilities.SmoothWidthPosition(originXLine + (-1) * signDirection * TOWER_SPAWN_DISTANCE * attempts);
@@ -272,9 +274,9 @@ namespace AI_Strategy
                 averageEnemyTowerPosition = (int)Math.Round(StaticStrategyUtilities.GetAverageUnitLocation(attackLane, enemyTowerPositions).xPos);
 
             Random random = new Random();
-            for (int i = 0; i < activeStrategy.soldiersToBuy; i++) 
+            for (int i = 0; i < activeStrategy.soldiersBuyTargetNr; i++) 
             {
-                //choose random side that is not average position of enemy towers
+                //CHOOSE SIDE AWAY FROM ENEMY AVG POS
                 int x = random.Next(PlayerLane.WIDTH);
                 if (x == averageEnemyTowerPosition)
                     x = x + SOLDIER_RANGE * Math.Sign(averageEnemyTowerPosition - ((PlayerLane.WIDTH - 1) / 2));
@@ -306,13 +308,13 @@ namespace AI_Strategy
 
         void ReevaluateBuyingBehaviour() 
         {
-            if (activeStrategy.towersToBuy > activeStrategy.towersBought && player.Gold > Tower.GetNextTowerCosts(defendLane)) {
+            if (activeStrategy.towersBuyTargetNr > activeStrategy.towersBought && player.Gold > Tower.GetNextTowerCosts(defendLane)) {
                 Random xRandom = new Random();
                 int randomXPos = StaticStrategyUtilities.SmoothTowerXPosition(xRandom.Next(0, PlayerLane.WIDTH - 1));
                 player.BuyTower(defendLane, randomXPos, PlayerLane.HEIGHT-1);
             }
 
-            if (activeStrategy.soldiersToBuy > activeStrategy.soldiersBought && player.Gold > SOLDIER_COST) 
+            if (activeStrategy.soldiersBuyTargetNr > activeStrategy.soldiersBought && player.Gold > SOLDIER_COST) 
             {
                 Random xRandom = new Random();
                 player.BuySoldier(attackLane, xRandom.Next(0, PlayerLane.WIDTH - 1));
@@ -344,7 +346,7 @@ namespace AI_Strategy
         Vector2Di GetBottomEnemySoldierPosition() 
         {
             if (enemySoldierPositions == null)
-                return new Vector2Di(PlayerLane.WIDTH / 2, PlayerLane.HEIGHT / 2); //default: mid
+                return new Vector2Di(PlayerLane.WIDTH / 2, PlayerLane.HEIGHT / 2); //DEFAULT: MID
             if (enemySoldierPositions.Count > 0)
             {
                 for (int y = PlayerLane.HEIGHT - 1; y >= 0; y--){

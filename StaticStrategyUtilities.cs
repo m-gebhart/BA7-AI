@@ -9,9 +9,10 @@ namespace AI_Strategy_Utilities
 {
     public static class StaticStrategyUtilities
     {
+        //LIBRARY OF STATIC FUNCTIONS 
         public static List<Unit> GetUnitsOfType(string type, PlayerLane lane)
         {
-            //workaround because lists of PlayerLane.cs are not accessible
+            //WORKAROUND BECAUSE LISTS OF PLAYERLANE.CS ARE NOT ACCESSIBLE
             List<Unit> tempUnitList = new List<Unit>();
             int row = 0;
             while (row < PlayerLane.HEIGHT)

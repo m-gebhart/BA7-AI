@@ -69,20 +69,20 @@ namespace AI_Strategy
 
         Vector2Di ActionAutonomousMove() 
         {
-            //walk straight if still in safe zone
+            //WALK STRAIGHT IF STILL IN SAFE ZONE
             if (posY <= PlayerLane.HEIGHT_OF_SAFETY_ZONE - 1)
                 return new Vector2Di(posX, PosY + speed);
 
-            //walk straight if defensive line build
+            //WALK STRAIGHT IF DEFENSIVE LINE OF ALLY SOLDIERS BUILD
             if (GetUnitPositionsInLine(posY, "S").Count > PlayerLane.WIDTH * 0.5f)
                 return new Vector2Di(posX, PosY + speed);
 
-            //just walk straight if no towers detected
+            //JUST WALK STRAIGHT IF NO TOWERS DETECTED
             List<Vector2Di> enemyTowersInFront = GetUnitPositionsInFront(range, "T");
             if (enemyTowersInFront.Count == 0)
                 return new Vector2Di(posX, PosY + speed);
 
-            //Otherwise Evade Towers autonomously
+            //OTHERWISE EVADE TOWERS AUTONOMOUSLY
             int averageTowerXPos = (int)Math.Round(StaticStrategyUtilities.GetAverageUnitLocation(lane, enemyTowersInFront).xPos);
             int moveXDirection = -1*Math.Sign((averageTowerXPos) - posX);
             if (averageTowerXPos + (range+1*moveXDirection) > PlayerLane.WIDTH || averageTowerXPos + (range+1*moveXDirection) < 0)
@@ -99,7 +99,7 @@ namespace AI_Strategy
         {
             if (GetUnitPositionsInLine(posY, "S").Count > PlayerLane.WIDTH * 0.5f)
                 return new Vector2Di(posX, PosY + speed);
-            //processing from central data reference
+            //PROCESSING FROM CENTRAL DATA REFERENCE
             return new Vector2Di(centralData.targetPos.xPos, PosY);
         } 
         
@@ -108,18 +108,17 @@ namespace AI_Strategy
             List<Vector2Di> towerPositions = GetUnitPositionsInFront(range, "T");
             if (towerPositions.Count > 0)
             {
-                //counting allies close by
+                //COUNTING ALLIES CLOSE BY
                 List<Vector2Di> allies = GetUnitPositionsCloseBy("S");
 
-
-                //counting allies in same line if not enough near by
+                //COUNTING ALLIES IN SAME LINE IF NOT ENOUGH NEAR BY
                 if (allies.Count <= health / range)
                 {
                     allies.Clear();
                     allies = GetUnitPositionsInLine(posY, "S");
                 }
 
-                //if alone, waiting for other allies to breach through together later = no movement
+                //IF ALONE, WAITING FOR OTHER ALLIES TO BREACH THROUGH TOGETHER = NO MOVEMENT FOR NOW
                 if (allies.Count <= health / range) 
                     return new Vector2Di(posX, posY);
             }

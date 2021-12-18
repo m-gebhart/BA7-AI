@@ -70,7 +70,7 @@ namespace AI_Strategy
             currentAction = GetAction();
             if (currentAction == ESoldierAction.EvadeTower)
             {
-                //find vertical part of lane without towers or least towers as possible 
+                //FIND VERTICAL PART OF LANE WITHOUT TOWERS OR LEAST TOWERS AS POSSIBLE 
                 int leastTowerCounter = PlayerLane.HEIGHT/2;
                 int xWithLeastTowers = 0;
                 for (int x = 0; x < PlayerLane.WIDTH-1; x++) 
@@ -101,8 +101,6 @@ namespace AI_Strategy
                 }
                 targetPos = new Vector2Di(xWithLeastTowers, 0);
             }
-            AI_TowerDefense.TowerDefense.LOG_Message += currentAction.ToString();
         }
-
     }
 }
